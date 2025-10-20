@@ -1,0 +1,57 @@
+data:
+  db_path: data/simu_db/attack_baseline/safety/ban10.db
+  csv_path: data/our_twitter_sim/base-agent-data/test_110_good_bad_random_1.0_1.0_zzj.csv
+simulation:
+  num_timesteps: 50
+  clock_factor: 60  
+  recsys_type: twhin-bert
+  reflection: True  # 这里开启reflection功能
+  shared_reflection: True
+  private_message_storm: True
+  detection: True
+  safety_prompt_ratio: 0.0
+model:
+  num_agents: 110
+  model_random_seed: 42
+  cfgs:
+    - model_type: /home/zhengzhijie/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct
+      num: 100
+      server_url: http://localhost:10000/v1
+      model_path: vllm
+      stop_tokens: [<|eot_id|>, <|end_of_text|>]
+      temperature: 0.0                    
+    - model_type: Pro/deepseek-ai/DeepSeek-V3
+      num: 10
+      server_url: https://api.siliconflow.cn/v1
+      model_path: openai
+      stop_tokens: [<|eot_id|>, <|end_of_text|>]
+      temperature: 0.0
+
+inference:
+  # model_type: /mnt/petrelfs/share_data/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct
+  model_type: [/home/zhengzhijie/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct,Pro/deepseek-ai/DeepSeek-V3]
+  model_path: [vllm,openai]
+  stop_tokens: [<|eot_id|>, <|end_of_text|>]
+  server_url:
+    - host: localhost  # 通过开发机localhost访问转发的端口
+      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030,10031,10032,10033,10034,10035,10036,10037,10038,10039]
+    # - host: 10.140.54.51
+    #   ports: [40000, 40001, 40002, 40003, 40004, 40005, 40006, 40007, 40008, 40009, 40010, 40011, 40012, 40013, 40014, 40015, 40016, 40017, 40018, 40019, 40020, 40021, 40022, 40023, 40024, 40025, 40026, 40027, 40028, 40029, 40030, 40031, 40032, 40033, 40034, 40035, 40036, 40037, 40038, 40039]
+    - host: https://api.siliconflow.cn/v1
+      ports: [30000,30001,30002,30003,30004,30005,30006,30007,30008,30009]  # 对于完整URL，端口设为0或任意值，不会被使用
+  port_ranges:
+    - range:
+          start: 0
+          end: 99
+      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030,10031,10032,10033,10034,10035,10036,10037,10038,10039]
+    # - range:
+    #       start: 50
+    #       end: 99
+    #   ports: [40000, 40001, 40002, 40003, 40004, 40005, 40006, 40007, 40008, 40009, 40010, 40011, 40012, 40013, 40014, 40015, 40016, 40017, 40018, 40019, 40020, 40021, 40022, 40023, 40024, 40025, 40026, 40027, 40028, 40029, 40030, 40031, 40032, 40033, 40034, 40035, 40036, 40037, 40038, 40039]
+    - range:
+          start: 100
+          end: 110
+      ports: [30000,30001,30002,30003,30004,30005,30006,30007,30008,30009]  # 对于API服务，端口不重要
+defense:
+  strategy: "ban"               # 防御策略类型                     # 结束时间步
+  gap: 10
