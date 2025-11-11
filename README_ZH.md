@@ -5,16 +5,16 @@
 </div>
 
 <p align="center">
-    🌐 <a href="https://github.com/your-org/MultiAgent4Fraud" target="_blank">项目主页</a>
-    | 📄 <a href="https://arxiv.org/abs/xxxx.xxxxx" target="_blank">论文</a>
-    | 🤗 <a href="https://huggingface.co/datasets/your-org/MultiAgent4Fraud" target="_blank">数据集</a>
+    🌐 <a href="https://zheng977.github.io/MutiAgent4Fraud/" target="_blank">项目主页</a>
+    | 📄 <a href="https://arxiv.org/abs/2511.06448" target="_blank">论文</a>
+    | 🤗 <a href="https://huggingface.co/datasets/ninty-seven/MultiAgentFraudBench" target="_blank">数据集</a>
 </p>
 
 <p align="center">
-  <img src="assets/structure.png" width="720" alt="框架总览"/>
+  <img src="assets/structure.jpg" width="720" alt="框架总览"/>
 </p>
 
-官方实现 **“XXX”**。本项目在 [OASIS](https://github.com/camel-ai/oasis) 基础上扩展，可规模化模拟多智能体金融诈骗场景，覆盖从公开造势、私聊劝诱到转账兑现的完整生命周期。
+官方实现 **"When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms"**（AI 智能体的线上共谋：社交平台上协作式大语言模型智能体的金融诈骗风险）。本项目在 [OASIS](https://github.com/camel-ai/oasis) 基础上扩展，可规模化模拟多智能体金融诈骗场景，覆盖从公开造势、私聊劝诱到转账兑现的完整生命周期。
 
 ---
 
@@ -148,7 +148,14 @@ python scripts/twitter_simulation/align_with_real_world/twitter_simulation_large
 
 ## 📄 引用
 
-敬请期待。
+@misc{ren2025ai,
+    title={When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms},
+    author={Qibing Ren and Zhijie Zheng and Jiaxuan Guo and Junchi Yan and Lizhuang Ma and Jing Shao},
+    year={2025},
+    eprint={2511.06448},
+    archivePrefix={arXiv},
+    primaryClass={cs.MA}
+}
 
 ---
 

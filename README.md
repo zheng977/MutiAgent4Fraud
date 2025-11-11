@@ -5,16 +5,16 @@
 </div>
 
 <p align="center">
-    🌐 <a href="https://github.com/your-org/MultiAgent4Fraud" target="_blank">Project Page</a>
-    | 📄 <a href="https://arxiv.org/abs/xxxx.xxxxx" target="_blank">Paper</a>
+    🌐 <a href="https://zheng977.github.io/MutiAgent4Fraud/" target="_blank">Project Page</a>
+    | 📄 <a href="https://arxiv.org/abs/2511.06448" target="_blank">Paper</a>
     | 🤗 <a href="https://huggingface.co/datasets/ninty-seven/MultiAgentFraudBench" target="_blank">Datasets</a>
 </p>
 
 <p align="center">
-  <img src="assets/structure.png" width="720" alt="Framework overview"/>
+  <img src="assets/structure.jpg" width="720" alt="Framework overview"/>
 </p>
 
-Official implementation of **“XXX ”** . The project builds upon [OASIS](https://github.com/camel-ai/oasis) to simulate multi-agent financial-fraud scenarios at scale, capturing the complete lifecycle from public hype building to private persuasion and money transfer.
+Official implementation of **"When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms"**. The project builds upon [OASIS](https://github.com/camel-ai/oasis) to simulate multi-agent financial-fraud scenarios at scale, capturing the complete lifecycle from public hype building to private persuasion and money transfer.
 
 ---
 
@@ -148,7 +148,14 @@ Scripts under `visualization/` help analyse simulation outputs:
 
 ## 📄 Citation
 
-Comming soon
+@misc{ren2025ai,
+    title={When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms},
+    author={Qibing Ren and Zhijie Zheng and Jiaxuan Guo and Junchi Yan and Lizhuang Ma and Jing Shao},
+    year={2025},
+    eprint={2511.06448},
+    archivePrefix={arXiv},
+    primaryClass={cs.MA}
+}
 
 ---
 
