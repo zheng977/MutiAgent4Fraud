@@ -148,13 +148,14 @@ python scripts/twitter_simulation/align_with_real_world/twitter_simulation_large
 
 ## 📄 引用
 
-@misc{ren2025ai,
-    title={When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms},
-    author={Qibing Ren and Zhijie Zheng and Jiaxuan Guo and Junchi Yan and Lizhuang Ma and Jing Shao},
-    year={2025},
-    eprint={2511.06448},
-    archivePrefix={arXiv},
-    primaryClass={cs.MA}
+@misc{ren2025aiagentscolludeonline,
+      title={When AI Agents Collude Online: Financial Fraud Risks by Collaborative LLM Agents on Social Platforms},
+      author={Qibing Ren and Zhijie Zheng and Jiaxuan Guo and Junchi Yan and Lizhuang Ma and Jing Shao},
+      year={2025},
+      eprint={2511.06448},
+      archivePrefix={arXiv},
+      primaryClass={cs.MA},
+      url={https://arxiv.org/abs/2511.06448},
 }
 
 ---
