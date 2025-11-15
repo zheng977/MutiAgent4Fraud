@@ -741,7 +741,7 @@ if __name__ == "__main__":
                 model_configs=model_configs,
                 inference_configs=inference_configs,
                 defense_configs=defense_configs,
-                action_space_file_path="scripts/twitter_simulation/align_with_real_world/action_space_prompt.txt",
+                action_space_file_path=None,
             )
         )
     else:
