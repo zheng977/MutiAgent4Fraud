@@ -89,6 +89,8 @@ docker-compose.override.yml
 
 # Logs
 *.log
+log/*
+!log/.gitkeep
 
 # Models
 models/
