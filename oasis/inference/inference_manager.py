@@ -126,7 +126,14 @@ class InferencerManager:
             host = url_config["host"]
             for port in url_config["ports"]:
                 try:
-                    _url = f"http://{host}:{port}/v1"
+                    # 支持完整 URL（如 http://localhost:18789/v1）或 host:port 拼接
+                    if host.startswith("http://") or host.startswith("https://"):
+                        # 完整 URL，直接使用（忽略 port，或用 port 作为标识）
+                        _url = host if host.endswith("/v1") else f"{host}/v1"
+                    else:
+                        # 简单 host + port 拼接
+                        _url = f"http://{host}:{port}/v1"
+                    
                     shared_memory = SharedMemory()
                     thread = InferenceThread(
                         model_path=model_path[idx],
@@ -137,6 +144,7 @@ class InferencerManager:
                         shared_memory=shared_memory,
                     )
                     self.threads[port] = thread
+                    logger.info(f"Initialized thread for port {port} with URL: {_url}")
                 except Exception as e:
                     logger.error(f"Failed to initialize thread for port {port}: {e}")
 

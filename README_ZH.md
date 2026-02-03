@@ -10,6 +10,14 @@
     | 🤗 <a href="https://huggingface.co/datasets/ninty-seven/MultiAgentFraudBench" target="_blank">数据集</a>
 </p>
 
+## 📰 最新动态
+
+- **[2026-02-03]** 新增 [OpenClaw](https://github.com/openclaw/openclaw) 支持，可使用本地 AI Agent 进行推理。
+- **[2026-02-03]** 重构了主实验代码，配置更简洁、使用更便捷。
+- **[2026-01-26]** 论文被 **ICLR 2026** 接收！🎉
+
+---
+
 <p align="center">
   <img src="assets/structure.jpg" width="720" alt="框架总览"/>
 </p>

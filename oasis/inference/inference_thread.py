@@ -79,6 +79,21 @@ class InferenceThread:
                 url=base_url,
                 api_key=api_key,
             )
+        # OpenClaw 支持: 通过本地或远程 OpenAI 兼容服务
+        if model_path == "openclaw":
+            api_key = os.getenv("OPENCLAW_API_KEY", "not-needed")
+            base_url = self.server_url or os.getenv("OPENCLAW_API_BASE", "http://localhost:18789/v1")
+            thread_log.info(f"Using OpenClaw backend at {base_url}")
+            return ModelFactory.create(
+                model_platform=ModelPlatformType.OPENAI_COMPATIBILITY_MODEL,
+                model_type=self.model_type,
+                model_config_dict={
+                    "temperature": temperature,
+                    "stop": list(stop_tokens) if stop_tokens else None,
+                },
+                url=base_url,
+                api_key=api_key,
+            )
         if not self.server_url:
             raise ValueError(
                 "server_url must be provided for local/vLLM model deployments."
@@ -112,3 +127,42 @@ class InferenceThread:
                     self.count,
                 )
             time.sleep(0.01)
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    from dotenv import load_dotenv
+    
+    # 加载 .env 文件
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    load_dotenv(env_path)
+    
+    # 清除并设置代理
+    for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+        if key in os.environ:
+            del os.environ[key]
+    
+    # 设置代理（如需访问外部API）
+    os.environ["http_proxy"] = ""
+    os.environ["https_proxy"] = os.environ["http_proxy"]
+    os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+
+    # 测试 OpenAI 兼容 API
+    inference_thread = InferenceThread(
+        model_type="gpt-4o-mini",
+        model_path="openai",
+        temperature=0.0,
+    )
+
+    # 测试消息
+    test_messages = [
+        {"role": "user", "content": "你好!"}
+    ]
+
+    print("Testing inference...")
+    print(f"Using API base: {os.environ.get('OPENAI_API_BASE')}")
+    try:
+        response = inference_thread.model_backend.run(test_messages)
+        print(f"Response: {response.choices[0].message.content}")
+    except Exception as e:
+        print(f"Error: {e}")

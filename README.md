@@ -10,6 +10,14 @@
     | 🤗 <a href="https://huggingface.co/datasets/ninty-seven/MultiAgentFraudBench" target="_blank">Datasets</a>
 </p>
 
+## 📰 News
+
+- **[2026-02-03]** Added [OpenClaw](https://github.com/openclaw/openclaw) support for local AI agent inference.
+- **[2026-02-03]** We refactored the main experiment codebase for easier configuration and usage.
+- **[2026-01-26]** Our paper has been accepted by **ICLR 2026**! 🎉
+
+---
+
 <p align="center">
   <img src="assets/structure.jpg" width="720" alt="Framework overview"/>
 </p>
