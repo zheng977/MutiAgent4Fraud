@@ -1,57 +1,104 @@
 data:
   db_path: data/simu_db/attack_baseline/safety/ban10.db
   csv_path: data/our_twitter_sim/base-agent-data/test_110_good_bad_random_1.0_1.0_zzj.csv
+
+# 代理配置（可选，不设置则不使用代理）
+proxy:
+  http_proxy: ""
+  https_proxy: ""
+  no_proxy: "localhost,127.0.0.1"
+
 simulation:
-  num_timesteps: 50
+  num_timesteps: 1
   clock_factor: 60  
   recsys_type: twhin-bert
-  reflection: True  # 这里开启reflection功能
+  twhin_bert_model_path: /mnt/shared-storage-user/zhengzhijie/twhin-bert-base
+  reflection: True
   shared_reflection: True
-  private_message_storm: True
-  detection: True
+  private_message_storm: False
+  detection: False
   safety_prompt_ratio: 0.0
+
 model:
   num_agents: 110
   model_random_seed: 42
   cfgs:
+    # ========== vLLM 本地部署 (agent 0-99) ==========
     - model_type: /home/zhengzhijie/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct
       num: 100
       server_url: http://localhost:10000/v1
       model_path: vllm
       stop_tokens: [<|eot_id|>, <|end_of_text|>]
-      temperature: 0.0                    
+      temperature: 0.0
+    
+    # ========== OpenAI API (agent 100-104) ==========
     - model_type: Pro/deepseek-ai/DeepSeek-V3
-      num: 10
+      num: 5
       server_url: https://api.siliconflow.cn/v1
       model_path: openai
-      stop_tokens: [<|eot_id|>, <|end_of_text|>]
+      stop_tokens: []
+      temperature: 0.0
+    
+    # ========== OpenClaw Gateway (agent 105-109) ==========
+    - model_type: anthropic/claude-opus-4-5
+      num: 5
+      server_url: http://localhost:18789/v1
+      model_path: openclaw
+      stop_tokens: []
       temperature: 0.0
 
+# ==================== 推理配置（三种后端混合） ====================
 inference:
-  # model_type: /mnt/petrelfs/share_data/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct
-  model_type: [/home/zhengzhijie/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct,Pro/deepseek-ai/DeepSeek-V3]
-  model_path: [vllm,openai]
+  # 模型类型列表：按 server_url 顺序对应
+  model_type: [/home/zhengzhijie/ai4good_shared/models/Qwen/Qwen2.5-32B-Instruct, Pro/deepseek-ai/DeepSeek-V3, anthropic/claude-opus-4-5]
+  # 后端类型列表：vllm / openai / openclaw
+  model_path: [vllm, openai, openclaw]
   stop_tokens: [<|eot_id|>, <|end_of_text|>]
+  
   server_url:
-    - host: localhost  # 通过开发机localhost访问转发的端口
-      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030,10031,10032,10033,10034,10035,10036,10037,10038,10039]
-    # - host: 10.140.54.51
-    #   ports: [40000, 40001, 40002, 40003, 40004, 40005, 40006, 40007, 40008, 40009, 40010, 40011, 40012, 40013, 40014, 40015, 40016, 40017, 40018, 40019, 40020, 40021, 40022, 40023, 40024, 40025, 40026, 40027, 40028, 40029, 40030, 40031, 40032, 40033, 40034, 40035, 40036, 40037, 40038, 40039]
+    # --- 1. vLLM 本地部署（多端口负载均衡） ---
+    - host: localhost
+      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009,
+              10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019,
+              10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029,
+              10030, 10031, 10032, 10033, 10034, 10035, 10036, 10037, 10038, 10039]
+    
+    # --- 2. OpenAI API（完整URL，端口仅作标识） ---
     - host: https://api.siliconflow.cn/v1
-      ports: [30000,30001,30002,30003,30004,30005,30006,30007,30008,30009]  # 对于完整URL，端口设为0或任意值，不会被使用
+      ports: [20000, 20001, 20002, 20003, 20004, 20005, 20006, 20007, 20008, 20009]
+    
+    # --- 3. OpenClaw Gateway（单端口） ---
+    - host: http://localhost:18789/v1
+      ports: [30000, 30001, 30002, 30003, 30004]  # 端口仅作标识，实际连接同一 Gateway
+
+  # Agent 到端口的映射
   port_ranges:
+    # Agent 0-99 使用 vLLM
     - range:
-          start: 0
-          end: 99
-      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030,10031,10032,10033,10034,10035,10036,10037,10038,10039]
-    # - range:
-    #       start: 50
-    #       end: 99
-    #   ports: [40000, 40001, 40002, 40003, 40004, 40005, 40006, 40007, 40008, 40009, 40010, 40011, 40012, 40013, 40014, 40015, 40016, 40017, 40018, 40019, 40020, 40021, 40022, 40023, 40024, 40025, 40026, 40027, 40028, 40029, 40030, 40031, 40032, 40033, 40034, 40035, 40036, 40037, 40038, 40039]
+        start: 0
+        end: 99
+      ports: [10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009,
+              10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019,
+              10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029,
+              10030, 10031, 10032, 10033, 10034, 10035, 10036, 10037, 10038, 10039]
+    
+    # Agent 100-104 使用 OpenAI API
     - range:
-          start: 100
-          end: 110
-      ports: [30000,30001,30002,30003,30004,30005,30006,30007,30008,30009]  # 对于API服务，端口不重要
-defense:
-  strategy: "ban"               # 防御策略类型                     # 结束时间步
-  gap: 10
+        start: 100
+        end: 104
+      ports: [20000, 20001, 20002, 20003, 20004, 20005, 20006, 20007, 20008, 20009]
+    
+    # Agent 105-109 使用 OpenClaw
+    - range:
+        start: 105
+        end: 109
+      ports: [30000, 30001, 30002, 30003, 30004]
+
+# defense:
+#   strategy: "ban"
+#   gap: 10
+
+output:
+  base_dir: "./results"
+  run_name: "my_experiment"
+  add_timestamp: true

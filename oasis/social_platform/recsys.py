@@ -39,14 +39,37 @@ rec_log.setLevel('DEBUG')
 # Initially set to None, to be assigned once again in the recsys function
 model = None
 twhin_tokenizer, twhin_model = None, None
+_twhin_models_loaded = False
 
 # Create the TF-IDF model
 tfidf_vectorizer = TfidfVectorizer()
-# Prepare the twhin model
+# Device for model loading
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-twhin_tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path="/home/zhengzhijie/h-cluster-storage/twhin-bert-base",model_max_length=512)
-twhin_model = AutoModel.from_pretrained(pretrained_model_name_or_path="/home/zhengzhijie/h-cluster-storage/twhin-bert-base").to(device)
+
+def _load_twhin_models():
+    """Lazy load TwinBERT models when first needed."""
+    global twhin_tokenizer, twhin_model, _twhin_models_loaded
+    
+    if _twhin_models_loaded:
+        return twhin_tokenizer, twhin_model
+    
+    # Load TwinBERT model path from environment variable or use default
+    model_path = os.getenv(
+        "TWHIN_BERT_MODEL_PATH",
+    )
+    
+    rec_log.info(f"Loading TwinBERT model from: {model_path}")
+    twhin_tokenizer = AutoTokenizer.from_pretrained(
+        pretrained_model_name_or_path=model_path, 
+        model_max_length=512
+    )
+    twhin_model = AutoModel.from_pretrained(
+        pretrained_model_name_or_path=model_path
+    ).to(device)
+    _twhin_models_loaded = True
+    
+    return twhin_tokenizer, twhin_model
 
 # All historical tweets and the most recent tweet of each user
 user_previous_post_all = {}
@@ -90,9 +113,8 @@ def get_recsys_model(recsys_type: str = None):
         model = load_model('paraphrase-MiniLM-L6-v2')
         return model
     elif recsys_type == RecsysType.TWHIN.value:
-        twhin_tokenizer, twhin_model = load_model("Twitter/twhin-bert-base")
-        models = (twhin_tokenizer, twhin_model)
-        return models
+        # Use lazy loading for TwinBERT models
+        return _load_twhin_models()
     elif (recsys_type == RecsysType.REDDIT.value
           or recsys_type == RecsysType.RANDOM.value):
         return None
@@ -417,6 +439,10 @@ def rec_sys_personalized_twh(
         # source_post_indexs: List[int],
         recall_only: bool = False,
         enable_like_score: bool = False) -> List[List]:
+    # Load TwinBERT models if not already loaded
+    global twhin_tokenizer, twhin_model
+    twhin_tokenizer, twhin_model = _load_twhin_models()
+    
     # Set some global variables to reduce time consumption
     global date_score, fans_score, t_items, u_items, user_previous_post
     global user_previous_post_all, user_profiles

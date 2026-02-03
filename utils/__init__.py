@@ -11,18 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-from .inference_manager import InferencerManager
-from .inference_thread import InferenceThread
+"""Utility modules for the simulation framework."""
 
-# OpenClaw 兼容模块
-from .openclaw_adapter import OpenClawInferenceAdapter
-from .openclaw_server import OpenClawServer, ServerConfig
+from utils.logging_utils import setup_logging
+from utils.proxy_utils import configure_proxies
+from utils.report_utils import generate_report, collect_final_metrics
+from utils.defense_utils import perform_debunking, generate_detection_batches
 
 __all__ = [
-    "InferencerManager",
-    "InferenceThread",
-    # OpenClaw 兼容
-    "OpenClawInferenceAdapter",
-    "OpenClawServer",
-    "ServerConfig",
+    "setup_logging",
+    "configure_proxies",
+    "generate_report",
+    "collect_final_metrics",
+    "perform_debunking",
+    "generate_detection_batches",
 ]

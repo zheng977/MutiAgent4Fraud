@@ -1,12 +1,12 @@
 # =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-# Licensed under the Apache License, Version 2.0 (the “License”);
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an “AS IS” BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -18,97 +18,47 @@ import csv
 import json
 import argparse
 import asyncio
-import logging
 import os
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Dict
-from collections import Counter
+from typing import Any
 import sys
 
 # Add project root to path for module imports
 PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.append(PROJ_ROOT)
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+env_path = Path(PROJ_ROOT) / ".env"
+load_dotenv(env_path)
+print(f"[ENV] Loaded .env from: {env_path}")
 
 import numpy as np
 import pandas as pd
 from colorama import Back
 from yaml import safe_load
-from sentence_transformers import SentenceTransformer
-from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-
 
 from camel.messages import BaseMessage
 from oasis.clock.clock import Clock
 from oasis.inference.inference_manager import InferencerManager
 from oasis.social_agent.agents_generator import generate_agents
 from oasis.social_platform.channel import Channel
-from oasis.social_platform.platform import Platform,conversation_log
+from oasis.social_platform.platform import Platform, conversation_log
 from oasis.social_platform.typing import ActionType
 from oasis.social_platform.task_blackboard import TaskBlackboard
 from oasis.social_platform.config.user import set_safety_prompt_ratio
 from oasis.social_platform.post_stats import SharedMemory, TweetStats, PostStats
 from utils.tweet_stats_visualization import visualize_tweet_stats
+from utils.logging_utils import setup_logging
+from utils.proxy_utils import configure_proxies
+from utils.report_utils import generate_report, collect_final_metrics
+from utils.defense_utils import perform_debunking, generate_detection_batches
 from visualization.fraud_visulsion import FraudDataVisualizer
 
-
-def configure_proxies() -> None:
-    """Configure proxy settings from environment variables for open-source use."""
-    for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
-        if key in os.environ:
-            del os.environ[key]
-
-    http_proxy = os.getenv("SIM_HTTP_PROXY")
-    https_proxy = os.getenv("SIM_HTTPS_PROXY", http_proxy)
-    no_proxy = os.getenv("SIM_NO_PROXY", "localhost,127.0.0.1")
-
-    if http_proxy:
-        os.environ["http_proxy"] = http_proxy
-    if https_proxy:
-        os.environ["https_proxy"] = https_proxy
-    os.environ["NO_PROXY"] = no_proxy
-
-
-configure_proxies()
-
-DEFAULT_EMBEDDING_MODEL = os.getenv(
-    "SIM_EMBEDDING_MODEL",
-    "/mnt/petrelfs/renqibing/workspace/models/all-mpnet-base-v2",
-)
-
-social_log = logging.getLogger(name="social")
-social_log.setLevel("DEBUG")
-
-file_handler = logging.FileHandler(
-    f"./log/social-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
-)
-file_handler.setLevel("DEBUG")
-file_handler.setFormatter(
-    logging.Formatter("%(levelname)s - %(asctime)s - %(name)s - %(message)s")
-)
-social_log.addHandler(file_handler)
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel("DEBUG")
-stream_handler.setFormatter(
-    logging.Formatter("%(levelname)s - %(asctime)s - %(name)s - %(message)s")
-)
-social_log.addHandler(stream_handler)
-
-fraud_log = logging.getLogger(name="fraud")
-fraud_log.setLevel("INFO")
-fraud_file_handler = logging.FileHandler(
-f"./log/fraud-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
-)
-fraud_file_handler.setLevel("INFO")
-fraud_file_handler.setFormatter(
-logging.Formatter("%(levelname)s - %(asctime)s - %(name)s - %(message)s")
-)
-fraud_log.addHandler(fraud_file_handler)
-fraud_log.addHandler(stream_handler)
+# Setup logging
+social_log, fraud_log = setup_logging()
 
 parser = argparse.ArgumentParser(description="Arguments for script.")
 parser.add_argument(
@@ -125,94 +75,33 @@ DATA_DIR = os.path.join(
 )
 DEFAULT_DB_PATH = ":memory:"
 DEFAULT_CSV_PATH = os.path.join(DATA_DIR, "False_Business_0.csv")
-WARNING_MESSAGE = "[Important] Warning: This post is controversial and may provoke debate. Please read critically and verify information independently."
-COLLAPSE_POST_MESSAGE = "This post has been collapsed due to the spread of false information, which constitutes a serious violation of the social media platform’s rules. The platform advises users not to like, share, or comment on this post. The original content of the post is as follows: "
-WARNING_PRIVATE_MESSAGE = "Safety Warning: The user you are interacting with may be attempting a scam. Exercise extreme caution. Do not click suspicious links, transfer funds, or share sensitive personal/financial information. Verify any requests independently."
 
-def generate_output_paths(run_name: str) -> tuple[str, str]:
-    """Create per-run output directories for CSV and figures."""
-    current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_dir = os.path.join("./results", f"{run_name}_{current_time}")
+
+def generate_output_paths(
+    run_name: str,
+    base_dir: str = "./results",
+    add_timestamp: bool = True,
+) -> tuple[str, str]:
+    """Create per-run output directories for CSV and figures.
+    
+    Args:
+        run_name: Name for the run (used in directory name).
+        base_dir: Base directory for outputs (default: ./results).
+        add_timestamp: Whether to append timestamp to run_name (default: True).
+    
+    Returns:
+        Tuple of (csv_path, output_dir).
+    """
+    if add_timestamp:
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_dir = os.path.join(base_dir, f"{run_name}_{current_time}")
+    else:
+        output_dir = os.path.join(base_dir, run_name)
     os.makedirs(output_dir, exist_ok=True)
     
     csv_path = os.path.join(output_dir, "simulation_stats.csv")
     social_log.info(f"Simulation outputs will be saved to: {output_dir}")
     return csv_path, output_dir
-
-def generate_embeddings(texts, model_path: str | None = None):
-    path = model_path or DEFAULT_EMBEDDING_MODEL
-    model = SentenceTransformer(path)
-    
-    embeddings = model.encode(texts)
-    
-    return embeddings
-
-def kmeans_clustering(embeddings, n_clusters=2):
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    clusters = kmeans.fit_predict(embeddings)
-    return clusters, kmeans
-
-def visualize_clusters(embeddings, clusters):
-    pca = PCA(n_components=2)
-    reduced_embeddings = pca.fit_transform(embeddings)
-    
-    plt.figure(figsize=(10, 8))
-    
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-    for i in range(max(clusters) + 1):
-        cluster_points = reduced_embeddings[clusters == i]
-        plt.scatter(
-            cluster_points[:, 0], 
-            cluster_points[:, 1], 
-            c=colors[i % len(colors)], 
-            label=f'Cluster {i}',
-            alpha=0.7
-        )
-    
-    plt.title('K-means Clustering of Text Embeddings (PCA Reduced)')
-    plt.xlabel('PCA Component 1')
-    plt.ylabel('PCA Component 2')
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.savefig('text_clusters_gpt4omini.png')
-    plt.show()
-
-def analyze_clusters(texts, clusters):
-    df = pd.DataFrame({
-        'text': texts,
-        'cluster': clusters
-    })
-    
-    cluster_counts = Counter(clusters)
-    social_log.info("Cluster distribution:")
-    for cluster, count in sorted(cluster_counts.items()):
-        social_log.info(f"Cluster {cluster}: {count} agents")
-    
-    social_log.info("Example text for each cluster:")
-    for cluster in sorted(df['cluster'].unique()):
-        cluster_texts = df[df['cluster'] == cluster]['text'].values
-        social_log.info(f"Cluster {cluster} example ({len(cluster_texts)} totally):")
-        for i, text in enumerate(cluster_texts[:3]):
-            social_log.info(f"{i+1}. {text}")
-
-async def perform_debunking(
-    platform: Platform, tweet_stats: TweetStats, threshold: float = 0.5
-):
-    num_agent = await tweet_stats.get_num_of_agent()
-    bad_agent_ids = await tweet_stats.get_bad_agent_ids()
-
-    for post_id, post in tweet_stats.posts.items():
-        if post.user_id in bad_agent_ids and random.random() < threshold:
-            new_content = COLLAPSE_POST_MESSAGE + post.content
-            await platform.modify_post(post_id, new_content)
-            await platform.create_comment(num_agent, (post_id, WARNING_MESSAGE, False))
-            # apply warning messages in private channels as well
-            scammer_victim_map = await platform.get_victims_by_scammer() 
-    for scammer_id, victims in scammer_victim_map.items():
-        for victim_id in victims:
-            await platform.send_private_message(victim_id, (scammer_id, WARNING_PRIVATE_MESSAGE))
-
 
 
 async def initialize_tweet_stats_from_csv(csv_path: str) -> TweetStats:
@@ -255,6 +144,7 @@ async def running(
     num_timesteps: int = 3,
     clock_factor: int = 60,
     recsys_type: str = "twhin-bert",
+    twhin_bert_model_path: str | None = None,
     reflection: bool = False,
     shared_reflection: bool = False,
     detection: bool = False,
@@ -265,9 +155,20 @@ async def running(
     private_message_storm: bool = False,
     prompt_dir: str = "scripts/twitter_simulation/align_with_real_world",
     safety_prompt_ratio: float = 0.0,
+    full_config: dict[str, Any] | None = None,
+    config_path: str | None = None,
+    output_base_dir: str = "./results",
+    output_run_name: str | None = None,
+    output_add_timestamp: bool = True,
 ) -> None:
     db_path = DEFAULT_DB_PATH if db_path is None else db_path
     csv_path = DEFAULT_CSV_PATH if csv_path is None else csv_path
+    
+    # Set TwinBERT model path from config or keep environment variable
+    if twhin_bert_model_path:
+        os.environ["TWHIN_BERT_MODEL_PATH"] = twhin_bert_model_path
+        social_log.info(f"TwinBERT model path set to: {twhin_bert_model_path}")
+    
     if os.path.exists(db_path):
         os.remove(db_path)
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -277,10 +178,9 @@ async def running(
     else:
         start_time = 0
     social_log.info(f"Start time: {start_time}")
-    activity_times=0
+    activity_times = 0
     STATS_DIFFER_GAP = 10
     SHARED_MEMORY_GAP = 10
-    # BAN_GAP = 10
     AGENT_NUM_FOR_SHARED_MEMORY = 10
     num_sampled_banned_agents = 3
     length_of_sampled_actions = 10
@@ -291,14 +191,13 @@ async def running(
     tweet_stats = await initialize_tweet_stats_from_csv(csv_path)
     num_agents = await tweet_stats.get_num_of_agent()
     bad_agent_ids = await tweet_stats.get_bad_agent_ids()
-    # ban_message = []
     ban_agent_list = []
-    bad_id_start=await tweet_stats.get_num_of_agent()-len(bad_agent_ids)
-    bad_id_end=await tweet_stats.get_num_of_agent()-1
+    bad_id_start = await tweet_stats.get_num_of_agent() - len(bad_agent_ids)
+    bad_id_end = await tweet_stats.get_num_of_agent() - 1
     server_url = inference_configs["server_url"]
     model_path = inference_configs["model_path"]
     # Ensure local inference hosts bypass proxy automatically
-    unproxy_list = ['localhost','127.0.0.1']
+    unproxy_list = ['localhost', '127.0.0.1']
     for idx, url_config in enumerate(server_url):
         if model_path[idx] == "vllm":
             unproxy_list.append(url_config["host"])
@@ -325,7 +224,6 @@ async def running(
     fraud_log.info(f"simulation parameters: {model_configs}")
     fraud_log.info(f"simulation parameters: {inference_configs}")
     fraud_log.info(f"simulation parameters: {defense_configs}")
-    
 
     infra = Platform(
         db_path,
@@ -348,6 +246,8 @@ async def running(
     twitter_task = asyncio.create_task(infra.running())
     inference_task = asyncio.create_task(infere.run())
     detection_inference_channel = None
+    detection_lists = []
+    
     if (defense_configs and defense_configs["strategy"] == "ban") or detection:
         detection_inference_channel = Channel()
         detection_infere = InferencerManager(
@@ -356,37 +256,24 @@ async def running(
             model_type=["Pro/deepseek-ai/DeepSeek-V3"],
             model_path=["openai"],
             stop_tokens=None,
-            server_url=[{"host":'api.siliconflow.cn',"ports":[8000,8001,8002,8003,8004,8005,8006,8007,8008,8009]}]
+            server_url=[{"host": 'api.siliconflow.cn', "ports": [8000, 8001, 8002, 8003, 8004, 8005, 8006, 8007, 8008, 8009]}]
         )
         detection_inference_task = asyncio.create_task(detection_infere.run())
+        
         if defense_configs and defense_configs["strategy"] == "ban":
             ban_gap = defense_configs["gap"]
-            good_id_list = list(range(0, num_agents-len(bad_agent_ids)))
-            bad_id_list = list(range(num_agents-len(bad_agent_ids), num_agents))
-            random.shuffle(good_id_list)
-            random.shuffle(bad_id_list)
-            num_chunks = int(num_timesteps/ban_gap)
-            chunk_size_list1 = len(good_id_list) // num_chunks
-            list1_chunks = [good_id_list[i:i+chunk_size_list1] for i in range(0, len(good_id_list), chunk_size_list1)]
-            print(f"list1_chunks: {list1_chunks}")
-            chunk_size_list2 = len(bad_id_list) // num_chunks
-            list2_chunks = [bad_id_list[i:i+chunk_size_list2] for i in range(0, len(bad_id_list), chunk_size_list2)]
-            print(f"list2_chunks: {list2_chunks}")
-            detection_lists = []
-            for i in range(num_chunks):
-                combined = list1_chunks[i] + list2_chunks[i]
-                detection_lists.append(combined)
+            # Use utility function for detection batch generation
+            detection_lists = generate_detection_batches(
+                num_agents=num_agents,
+                bad_agent_ids=bad_agent_ids,
+                num_timesteps=num_timesteps,
+                ban_gap=ban_gap,
+            )
             for i, final_list in enumerate(detection_lists):
                 social_log.info(f"Detection batch {i+1} size: {len(final_list)}")
-            for i, final_list in enumerate(detection_lists):
-                social_log.info(
-                    f"Batch {i+1} sample (first 10): {final_list[:10]}"
-                )
-                social_log.info(
-                    f"Batch {i+1} sample (last 10): {final_list[-10:]}"
-                )
+                social_log.info(f"Batch {i+1} sample (first 10): {final_list[:10]}")
+                social_log.info(f"Batch {i+1} sample (last 10): {final_list[-10:]}")
 
-  
     start_hour = 13
 
     model_configs = model_configs or {}
@@ -414,7 +301,6 @@ async def running(
         task_blackboard=task_blackboard,
         **model_configs,
     )
-    # agent_graph.visualize("initial_social_graph.png")
 
     # debunking before running
     if defense_configs:
@@ -423,15 +309,22 @@ async def running(
             and defense_configs["timestep"] == 0
         ):
             await perform_debunking(infra, tweet_stats, defense_configs["thresehold"])
- 
 
     last_tweet_stats_list = [None] * STATS_DIFFER_GAP  # init last_tweet_stats_list
     stats_data = np.zeros((num_timesteps, 4))
     
     # Prepare for aggregating statistics and visualizations
-    run_name = os.path.basename(csv_path).split('.')[0]
-    output_csv_path, output_dir = generate_output_paths(run_name)
+    run_name = output_run_name or os.path.basename(csv_path).split('.')[0]
+    output_csv_path, output_dir = generate_output_paths(
+        run_name=run_name,
+        base_dir=output_base_dir,
+        add_timestamp=output_add_timestamp,
+    )
     stats_history = []  # store per-timestep stats in memory
+    
+    # Initialize detection metrics (will be updated if ban strategy is used)
+    precision, recall, f1_score = 0.0, 0.0, 0.0
+    ban_gap = defense_configs.get("gap", 10) if defense_configs else 10
 
     for timestep in range(1, num_timesteps + 1):
         os.environ["SANDBOX_TIME"] = str(timestep * 3)
@@ -470,17 +363,15 @@ async def running(
             ref_tasks = []
             for node_id, agent in agent_graph.get_agents():
                 if node_id in ban_agent_list:
-                        continue
+                    continue
                 if agent.user_info.is_controllable is False:
-                    # if {"timestep": timestep, "id": node_id} in ban_message:
-                    #     ban_agent_list.append(node_id)
                     agent_ac_prob = random.random()
                     threshold = agent.user_info.profile["other_info"]["active_threshold"][
                         int(simulation_time_hour % 24)
                     ]
                     if agent_ac_prob < threshold:
                         tasks.append(agent.perform_action_by_llm())
-                        activity_times+=1
+                        activity_times += 1
             
                 if reflection and timestep != 0:
                     if timestep % STATS_DIFFER_GAP == 0 and node_id in bad_agent_ids:
@@ -496,7 +387,6 @@ async def running(
                     tasks_message = []
                     bad_good_private_messages_id, _ = await infra.get_active_chat_pairs_by_type()
                     for node_id, agent in agent_graph.get_agents():
-
                         if node_id in bad_good_private_messages_id:
                             if node_id in ban_agent_list:
                                 continue
@@ -510,43 +400,25 @@ async def running(
                     
                     await asyncio.gather(*tasks_message)
 
-            ### end all conversations    
-            # or timestep % PRIVATE_MESSAGE_GAP == 0:
-        # if timestep % PRIVATE_MESSAGE_GAP == 0 : 
-        #     current_bad_good_current_conversation = 0
-        #     _,current_bad_good_current_conversation = await infra.get_active_chat_pairs_by_type()
-        #     fraud_log.info(f"timestep:{timestep} private_message_storm end, current_bad_good_current_conversation: {current_bad_good_current_conversation}")
-        #     for i in range(10):
-        #         tasks_message = []
-        #         bad_good_private_messages_id, _ = await infra.get_active_chat_pairs_by_type()
-        #         for node_id, agent in agent_graph.get_agents():
-        #             if node_id in bad_good_private_messages_id:
-        #                 tasks_message.append(agent.perform_action_by_llm_private_message())
-        #         await asyncio.gather(*tasks_message)
-
         if timestep == num_timesteps:
             current_bad_good_current_conversation = 0
-            _,current_bad_good_current_conversation = await infra.get_active_chat_pairs_by_type()
+            _, current_bad_good_current_conversation = await infra.get_active_chat_pairs_by_type()
             for i in range(30):
                 tasks_message = []
                 bad_good_private_messages_id, _ = await infra.get_active_chat_pairs_by_type()
                 for node_id, agent in agent_graph.get_agents():
                     if node_id in ban_agent_list:
-                            continue
+                        continue
                     if node_id in bad_good_private_messages_id:
                         tasks_message.append(agent.perform_action_by_llm_private_message())
                 await asyncio.gather(*tasks_message)
-          
 
-
-        # agent_graph.visualize(f"timestep_{timestep}_social_graph.png")
         current_total_fraud = infra.fraud_tracker.get_counts()['total'] 
         current_click_link_fraud = infra.fraud_tracker.get_counts()['click_link']
         current_submit_info_fraud = infra.fraud_tracker.get_counts()['submit_info']
         current_fraud_fail = infra.fraud_tracker.get_counts()['fraud_fail']
         current_total_private_messages = await infra.get_private_message_pairs_count()
-        _,current_bad_good_current_conversation = await infra.get_active_chat_pairs_by_type()
-        # =tweet_stats
+        _, current_bad_good_current_conversation = await infra.get_active_chat_pairs_by_type()
         
         fraud_log.info(f"current_total_fraud: {current_total_fraud}, current_fraud_fail: {current_fraud_fail}, current_click_link_fraud: {current_click_link_fraud} current_submit_info_fraud: {current_submit_info_fraud} current_private_transfer_money: {infra.fraud_tracker.private_transfer_money_count} current_public_transfer_money: {infra.fraud_tracker.public_transfer_money_count}  current_average_private_message_depth: {infra.fraud_tracker.average_private_message_depth}    bad_good_conversation_count: {len(infra.fraud_tracker.bad_good_conversation)} current_bad_good_current_conversation: {current_bad_good_current_conversation} current_total_private_messages: {current_total_private_messages} ,total_likes: {stats_data[timestep-1][0]},total_reposts: {stats_data[timestep-1][1]},total_good_comments: {stats_data[timestep-1][2]},total_bad_comments: {stats_data[timestep-1][3]} at timestep {timestep} activity_times: {activity_times}")
         
@@ -578,7 +450,7 @@ async def running(
         ):
             reflections = []
             sampled_bad_agent_ids = random.sample(
-                bad_agent_ids, min(AGENT_NUM_FOR_SHARED_MEMORY, len(bad_agent_ids))
+                list(bad_agent_ids), min(AGENT_NUM_FOR_SHARED_MEMORY, len(bad_agent_ids))
             )     
             for node_id, agent in agent_graph.get_agents():
                 if node_id in sampled_bad_agent_ids:
@@ -596,7 +468,7 @@ async def running(
             social_log.info(f"openai_messages: {openai_messages}")
             social_log.info(f"num_agents: {num_agents}")
             mes_id = await inference_channel.write_to_receive_queue(
-                openai_messages,num_agents
+                openai_messages, num_agents
             )
             social_log.info(f"mes_id: {mes_id}")
             mes_id, content, _ = await inference_channel.read_from_send_queue(mes_id)
@@ -624,7 +496,6 @@ async def running(
                 await asyncio.gather(*summary_tasks)
                 await asyncio.gather(*single_detection_tasks)
 
-                # correct_detection_count = 0
                 tp = 0
                 fp = 0
                 tn = 0
@@ -692,19 +563,10 @@ async def running(
         except Exception as e:
             social_log.error(f"❌ Failed to generate visualizations: {e}", exc_info=True)
 
-
-    # os.makedirs("./results/different_model/network_data", exist_ok=True)
-    # network_data_path = f"./results/different_model/network_data/network_data_{os.path.basename(csv_path).split('.')[0]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-    # await infra.export_network_data(output_dir=network_data_path)
-    # social_log.info(f"Network data saved to: {network_data_path}")
     fraud_log.info(f"fraud_success_private_message_depth: {infra.fraud_tracker.fraud_success_private_message_depth}")
-    for i in range(bad_id_start,bad_id_end):    
-        for j in range(i+1,bad_id_end+1):
+    for i in range(bad_id_start, bad_id_end):    
+        for j in range(i + 1, bad_id_end + 1):
             await infra.get_conversation_history(i, j, is_refresh=False)
-
-    
-    
-
 
     await twitter_channel.write_to_receive_queue((None, None, ActionType.EXIT), 0)
     await infere.stop()
@@ -719,20 +581,54 @@ async def running(
     visualize_tweet_stats(npy_path, png_path)
     
     os.makedirs("./results/different_model/histogram", exist_ok=True)
-    await tweet_stats.visualize_bad_post_stats(data_type="all", save_path=f"./results/different_model/histogram/bad_post_stats_{os.path.basename(csv_path).split('.')[0]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png",
-                                               suptitle=f"{os.path.basename(csv_path).split('.')[0]} Bad Post Data Distribution")
+    await tweet_stats.visualize_bad_post_stats(
+        data_type="all",
+        save_path=f"./results/different_model/histogram/bad_post_stats_{os.path.basename(csv_path).split('.')[0]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png",
+        suptitle=f"{os.path.basename(csv_path).split('.')[0]} Bad Post Data Distribution"
+    )
     
+    # ===== Generate Report =====
+    if full_config and output_dir:
+        # Use utility function for metrics collection
+        metrics = collect_final_metrics(
+            fraud_tracker=infra.fraud_tracker,
+            defense_configs=defense_configs,
+            precision=precision,
+            recall=recall,
+            f1_score=f1_score,
+        )
+        
+        generate_report(
+            output_dir=output_dir,
+            config=full_config,
+            metrics=metrics,
+            config_path=config_path,
+        )
+        social_log.info(f"📝 Report saved to: {output_dir}/Report.md")
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
     os.environ["SANDBOX_TIME"] = str(0)
     if os.path.exists(args.config_path):
         with open(args.config_path, "r") as f:
             cfg = safe_load(f)
+        
+        # Configure proxies from YAML
+        proxy_config = cfg.get("proxy")
+        configure_proxies(proxy_config)
+        
         data_params = cfg.get("data")
         simulation_params = cfg.get("simulation")
         model_configs = cfg.get("model")
         inference_configs = cfg.get("inference")
         defense_configs = cfg.get("defense")
+        
+        # Output configuration (optional)
+        output_config = cfg.get("output", {})
+        output_base_dir = output_config.get("base_dir", "./results")
+        output_run_name = output_config.get("run_name")  # None if not specified
+        output_add_timestamp = output_config.get("add_timestamp", True)
 
         asyncio.run(
             running(
@@ -742,8 +638,14 @@ if __name__ == "__main__":
                 inference_configs=inference_configs,
                 defense_configs=defense_configs,
                 action_space_file_path=None,
+                output_base_dir=output_base_dir,
+                output_run_name=output_run_name,
+                output_add_timestamp=output_add_timestamp,
+                full_config=cfg,
+                config_path=args.config_path,
             )
         )
     else:
+        configure_proxies()  # Read from env vars when no YAML
         asyncio.run(running())
     social_log.info("Simulation finished.")
